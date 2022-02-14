@@ -4,11 +4,13 @@ namespace app\server\controller;
 
 use think\worker\Server;
 
-define('HEARTBEAT_TIME', 20); // 心跳间隔55秒
+define('HEARTBEAT_TIME', 55); // 心跳间隔55秒
 
 class Worker extends Server
 {
     protected $socket = 'http://0.0.0.0:2345';
+    // 全局变量，保存当前进程的客户端连接数
+    protected $connection_count = 0;
 
     public function __construct()
     {
@@ -44,6 +46,7 @@ class Worker extends Server
     public function onConnect()
     {
         $this->worker->onConnect = function ($connection) {
+            $this->connection_count++;
             $connection->onWebSocketConnect = function ($connection, $http_header) {
                 //  workerman是多进程的，每个进程内部会维护一个自增的connection id，所以多个进程之间的connection id会有重复。
                 //  如果想要不重复的connection id 可以根据需要给connection->id重新赋值，例如加上worker->id前缀。
@@ -84,5 +87,14 @@ class Worker extends Server
                 }
             }
         };
+    }
+
+    //向某个用户发送消息
+    protected static function sendMessageByUid($uid, $message, $connection)
+    {
+        if (isset($connection->connection_uids[$uid])) {
+            $conn = $connection->connection_uids[$uid];
+            $conn->send($message);
+        }
     }
 }
